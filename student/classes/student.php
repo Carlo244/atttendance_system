@@ -60,5 +60,21 @@ class Student extends Database
         return $this->executeQuerySingle($sql, [$studentId, $courseId, $date]);
     }
 
+    public function submitExcuseLetter($studentId, $courseId, $reason, $filePath = null)
+    {
+        $sql = "INSERT INTO excuse_letters (student_id, course_id, reason, file_path, status, submitted_at)
+            VALUES (?, ?, ?, ?, 'Pending', NOW())";
+        return $this->executeNonQuery($sql, [$studentId, $courseId, $reason, $filePath]);
+    }
+
+    public function getExcuseLetters($studentId)
+    {
+        $sql = "SELECT e.*, c.course_name, c.year_level
+                FROM excuse_letters e
+                JOIN courses c ON e.course_id = c.id
+                WHERE e.student_id = ?
+                ORDER BY e.submitted_at DESC";
+        return $this->executeQuery($sql, [$studentId]);
+    }
 
 }

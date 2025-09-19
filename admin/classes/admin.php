@@ -13,6 +13,18 @@ class Admin extends User
         return $this->executeQuery($sql);
     }
 
+    public function getEnrollments()
+    {
+        $sql = "SELECT e.student_id, e.course_id,
+                   u.name AS student_name, u.email AS student_email,
+                   c.course_name, c.year_level
+            FROM enrollments e
+            JOIN users u ON e.student_id = u.id
+            JOIN courses c ON e.course_id = c.id
+            ORDER BY u.name ASC";
+        return $this->executeQuery($sql);
+    }
+
     public function getAllAdmins()
     {
         $sql = "SELECT id, name, email 
@@ -91,15 +103,6 @@ class Admin extends User
         return $this->executeNonQuery($sql, [$student_id, $course_id]);
     }
 
-    public function getEnrollments()
-    {
-        $sql = "SELECT e.student_id, u.name AS student_name, e.course_id, c.course_name, c.year_level
-            FROM enrollments e
-            JOIN users u ON e.student_id = u.id
-            JOIN courses c ON e.course_id = c.id
-            ORDER BY c.year_level, c.course_name";
-        return $this->executeQuery($sql);
-    }
     public function getAttendanceByCourse($courseId, $yearLevel = null)
     {
         $sql = "SELECT a.attendance_date, a.status, a.check_in, a.check_out,
@@ -121,22 +124,38 @@ class Admin extends User
         return $this->executeQuery($sql, $params);
     }
 
-    /**
-     * Get attendance summary grouped by course & year level
-     */
+
+
+    public function getExcuseLetters()
+    {
+        $sql = "SELECT el.id, el.reason, el.file_path, el.status, el.submitted_at,
+                   u.name AS student_name, u.email AS student_email,
+                   c.course_name, c.year_level
+            FROM excuse_letters el
+            JOIN users u ON el.student_id = u.id
+            JOIN courses c ON el.course_id = c.id
+            ORDER BY el.submitted_at DESC";
+        return $this->executeQuery($sql);
+    }
+
     public function getAttendanceSummary()
     {
-        $sql = "SELECT c.course_name, c.year_level, 
-                       COUNT(a.id) AS total_records,
-                       SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) AS total_present,
-                       SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) AS total_absent,
-                       SUM(CASE WHEN a.status = 'Late' THEN 1 ELSE 0 END) AS total_late,
-                       SUM(CASE WHEN a.status = 'Excused' THEN 1 ELSE 0 END) AS total_excused
-                FROM courses c
-                LEFT JOIN attendance a ON c.id = a.course_id
-                GROUP BY c.id, c.course_name, c.year_level
-                ORDER BY c.year_level, c.course_name";
+        $sql = "SELECT c.course_name, c.year_level,
+                   COUNT(a.id) AS total_records,
+                   SUM(a.status = 'Present') AS total_present,
+                   SUM(a.status = 'Absent') AS total_absent,
+                   SUM(a.status = 'Late') AS total_late,
+                   SUM(a.status = 'Excused') AS total_excused
+            FROM attendance a
+            JOIN courses c ON a.course_id = c.id
+            GROUP BY c.id, c.course_name, c.year_level";
         return $this->executeQuery($sql);
+    }
+
+    public function updateExcuseStatus($id, $status)
+    {
+        $sql = "UPDATE excuse_letters SET status = ? WHERE id = ?";
+        return $this->executeNonQuery($sql, [$status, $id]);
     }
 
 }

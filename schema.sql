@@ -46,3 +46,20 @@ CREATE TABLE attendance (
     INDEX idx_student (student_id),
     INDEX idx_course (course_id)
 );
+
+
+-- Excuse Letters
+CREATE TABLE excuse_letters (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    student_id INT NOT NULL,
+    course_id INT NOT NULL,
+    reason TEXT NOT NULL,
+    file_path VARCHAR(255), -- optional uploaded file (doctor's note, etc.)
+    status ENUM('Pending','Approved','Rejected') DEFAULT 'Pending',
+    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at TIMESTAMP NULL,
+    reviewed_by INT NULL, -- admin user id
+    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+    FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
+);

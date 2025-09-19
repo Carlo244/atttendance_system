@@ -6,6 +6,7 @@ require_once __DIR__ . '/classes/attendance.php';
 $user = new User();
 $user->startSession();
 
+
 if (!$user->isLoggedIn() || $_SESSION['role'] !== 'student') {
     header("Location: ../login.php");
     exit;
@@ -17,38 +18,9 @@ $attendance = new Attendance();
 
 $studentId = $_SESSION['user_id'];
 $name = $_SESSION['name'] ?? 'Student';
+$excuses = $student->getExcuseLetters($studentId);
 
-/** Handle check-in / check-out */
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['course_id'])) {
-    $courseId = (int) $_POST['course_id'];
-    $today = date("Y-m-d");
 
-    if ($_POST['action'] === 'check_in') {
-        // prevent duplicate check-ins for same day/course
-        $todayRecord = $attendance->getAttendanceByDate($studentId, $courseId, $today);
-        if ($todayRecord) {
-            $_SESSION['error'] = "You already have an attendance record for today in this course.";
-        } else {
-            // record check-in time
-            $attendance->logAttendance($studentId, $courseId, 'Present', date("H:i:s"), null);
-            $_SESSION['success'] = "Checked in successfully.";
-        }
-    } elseif ($_POST['action'] === 'check_out') {
-        $todayRecord = $attendance->getAttendanceByDate($studentId, $courseId, $today);
-        if (!$todayRecord) {
-            $_SESSION['error'] = "No check-in found for today in this course.";
-        } elseif (!empty($todayRecord['check_out'])) {
-            $_SESSION['error'] = "You already checked out for this course today.";
-        } else {
-            // keep status Present; store checkout time
-            $attendance->updateAttendance($todayRecord['id'], 'Present', date("H:i:s"));
-            $_SESSION['success'] = "Checked out successfully.";
-        }
-    }
-
-    header("Location: student_dashboard.php");
-    exit;
-}
 
 /** Load data for view */
 $courses = $student->getEnrolledCourses($studentId);           // id, course_name, year_level
@@ -119,7 +91,7 @@ $history = $attendance->getAttendanceHistory($studentId);       // date, status,
                             </div>
                             <div class="flex gap-2">
                                 <!-- Check In -->
-                                <form method="POST">
+                                <form method="POST" action="../core/user_handle.php">
                                     <input type="hidden" name="action" value="check_in">
                                     <input type="hidden" name="course_id" value="<?= (int) $course['id'] ?>">
                                     <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg">
@@ -127,7 +99,7 @@ $history = $attendance->getAttendanceHistory($studentId);       // date, status,
                                     </button>
                                 </form>
                                 <!-- Check Out -->
-                                <form method="POST">
+                                <form method="POST" action="../core/user_handle.php">
                                     <input type="hidden" name="action" value="check_out">
                                     <input type="hidden" name="course_id" value="<?= (int) $course['id'] ?>">
                                     <button type="submit" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg">
@@ -182,6 +154,85 @@ $history = $attendance->getAttendanceHistory($studentId);       // date, status,
                 <p class="text-gray-400">No attendance records yet.</p>
             <?php endif; ?>
         </div>
+
+        <!-- Excuse Letters -->
+        <div class="bg-darkSurface p-6 rounded-2xl shadow-lg">
+            <h2 class="text-xl font-semibold text-primary mb-4">Excuse Letters</h2>
+
+            <!-- Submit Form -->
+            <form method="POST" action="../core/user_handle.php" enctype="multipart/form-data">
+                <input type="hidden" name="action" value="submit_excuse">
+                <div>
+                    <label class="block mb-1 text-accent">Course</label>
+                    <select name="course_id" class="w-full p-2 rounded bg-gray-800 text-white" required>
+                        <?php foreach ($courses as $course): ?>
+                            <option value="<?= (int) $course['id'] ?>">
+                                <?= htmlspecialchars($course['course_name'] . " (" . $course['year_level'] . ")") ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="block mb-1 text-accent">Reason</label>
+                    <textarea name="reason" class="w-full p-2 rounded bg-gray-800 text-white" rows="3"
+                        required></textarea>
+                </div>
+                <div>
+                    <label class="block mb-1 text-accent">Attach File (optional)</label>
+                    <input type="file" name="file" class="w-full text-white">
+                </div>
+                <button type="submit" name="submit_excuse" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg">
+                    Submit Excuse Letter
+                </button>
+            </form>
+
+            <!-- History -->
+            <?php if ($excuses): ?>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border border-gray-700 rounded-lg overflow-hidden">
+                        <thead class="bg-gray-800 text-accent">
+                            <tr>
+                                <th class="p-3">Date</th>
+                                <th class="p-3">Course</th>
+                                <th class="p-3">Reason</th>
+                                <th class="p-3">File</th>
+                                <th class="p-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($excuses as $row): ?>
+                                <tr class="border-b border-gray-700">
+                                    <td class="p-3"><?= htmlspecialchars($row['submitted_at']) ?></td>
+                                    <td class="p-3"><?= htmlspecialchars($row['course_name']) ?>
+                                        (<?= htmlspecialchars($row['year_level']) ?>)</td>
+                                    <td class="p-3"><?= htmlspecialchars($row['reason']) ?></td>
+                                    <td class="p-3">
+                                        <?php if ($row['file_path']): ?>
+                                            <a href="<?= htmlspecialchars($row['file_path']) ?>" target="_blank"
+                                                class="text-blue-400 underline">View</a>
+                                        <?php else: ?>
+                                            -
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="p-3 font-semibold">
+                                        <?php if ($row['status'] === 'Approved'): ?>
+                                            <span class="text-green-400">Approved</span>
+                                        <?php elseif ($row['status'] === 'Rejected'): ?>
+                                            <span class="text-red-400">Rejected</span>
+                                        <?php else: ?>
+                                            <span class="text-yellow-400">Pending</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <p class="text-gray-400">No excuse letters submitted yet.</p>
+            <?php endif; ?>
+        </div>
+
     </div>
 </body>
 

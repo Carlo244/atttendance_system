@@ -4,47 +4,12 @@ require_once __DIR__ . '/classes/admin.php';
 
 $admin = new Admin();
 $admin->startSession();
-
-// Handle course form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if ($_POST['action'] === 'add_course') {
-        $admin->addCourse($_POST['course_name'], $_POST['year_level']);
-        header("Location: admin_dashboard.php");
-        exit;
-    }
-
-    if ($_POST['action'] === 'edit_course') {
-        $admin->updateCourse($_POST['id'], $_POST['course_name'], $_POST['year_level']);
-        header("Location: admin_dashboard.php");
-        exit;
-    }
-}
-
-if (isset($_GET['action']) && $_GET['action'] === 'delete_course') {
-    $admin->deleteCourse($_GET['id']);
-    header("Location: admin_dashboard.php");
-    exit;
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if ($_POST['action'] === 'enroll_student') {
-        $admin->enrollStudent($_POST['student_id'], $_POST['course_id']);
-        header("Location: admin_dashboard.php");
-        exit;
-    }
-}
-
-if (isset($_GET['action']) && $_GET['action'] === 'unenroll_student') {
-    $admin->unenrollStudent($_GET['student_id'], $_GET['course_id']);
-    header("Location: admin_dashboard.php");
-    exit;
-}
-
-
 // Load data
+$excuseLetters = $admin->getExcuseLetters();
 $students = $admin->getAllStudents();
 $admins = $admin->getAllAdmins();
 $courses = $admin->getAllCourses();
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -88,7 +53,7 @@ $courses = $admin->getAllCourses();
             <h2 class="text-xl font-semibold mb-4">Course Management</h2>
 
             <!-- Add course -->
-            <form method="POST" class="flex space-x-4 mb-6">
+            <form method="POST" action="../core/admin_handle.php">
                 <input type="hidden" name="action" value="add_course">
                 <input type="text" name="course_name" placeholder="Course Name" required
                     class="px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 focus:ring-2 focus:ring-primary">
@@ -122,9 +87,8 @@ $courses = $admin->getAllCourses();
                                     <button
                                         onclick="openEditForm(<?= $c['id'] ?>, '<?= htmlspecialchars($c['course_name']) ?>', '<?= htmlspecialchars($c['year_level']) ?>')"
                                         class="bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded-lg text-sm">Edit</button>
-                                    <a href="?action=delete_course&id=<?= $c['id'] ?>"
-                                        class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg text-sm"
-                                        onclick="return confirm('Are you sure you want to delete this course?')">Delete</a>
+                                    <a href="../core/admin_handle.php?action=delete_course&id=<?= $c['id'] ?>">Delete</a>
+
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -136,7 +100,7 @@ $courses = $admin->getAllCourses();
                 <h2 class="text-xl font-semibold mb-4">Student Enrollment</h2>
 
                 <!-- Enroll Form -->
-                <form method="POST" class="flex space-x-4 mb-6">
+                <form method="POST" action="../core/admin_handle.php">
                     <input type="hidden" name="action" value="enroll_student">
 
                     <!-- Student Dropdown -->
@@ -165,82 +129,145 @@ $courses = $admin->getAllCourses();
                     </button>
                 </form>
 
-                <!-- Enrollments Table -->
+
+            </section>
+
+
+            <!-- Enrollments Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border border-gray-700 rounded-lg">
+                    <thead class="bg-gray-800">
+                        <tr>
+                            <th class="px-4 py-2">Student</th>
+                            <th class="px-4 py-2">Course</th>
+                            <th class="px-4 py-2">Year Level</th>
+                            <th class="px-4 py-2">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($admin->getEnrollments() as $e): ?>
+                            <tr class="border-t border-gray-700">
+                                <td class="px-4 py-2"><?= htmlspecialchars($e['student_name']) ?></td>
+                                <td class="px-4 py-2"><?= htmlspecialchars($e['course_name']) ?></td>
+                                <td class="px-4 py-2"><?= htmlspecialchars($e['year_level']) ?></td>
+                                <td class="px-4 py-2">
+                                    <a
+                                        href="../core/admin_handle.php?action=unenroll_student&student_id=<?= $e['student_id'] ?>&course_id=<?= $e['course_id'] ?>">Unenroll</a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+        </section><!-- Attendance Reports -->
+        <div class="bg-darkSurface p-6 rounded-2xl shadow-lg mt-8">
+            <h2 class="text-xl font-semibold text-primary mb-4">Attendance Reports</h2>
+
+            <?php
+            $summary = $admin->getAttendanceSummary();
+            if ($summary): ?>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left border border-gray-700 rounded-lg">
-                        <thead class="bg-gray-800">
+                    <table class="w-full text-left border border-gray-700 rounded-lg overflow-hidden">
+                        <thead class="bg-gray-800 text-accent">
                             <tr>
-                                <th class="px-4 py-2">Student</th>
-                                <th class="px-4 py-2">Course</th>
-                                <th class="px-4 py-2">Year Level</th>
-                                <th class="px-4 py-2">Actions</th>
+                                <th class="p-3">Course</th>
+                                <th class="p-3">Year Level</th>
+                                <th class="p-3">Total Records</th>
+                                <th class="p-3">Present</th>
+                                <th class="p-3">Absent</th>
+                                <th class="p-3">Late</th>
+                                <th class="p-3">Excused</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($admin->getEnrollments() as $e): ?>
-                                <tr class="border-t border-gray-700">
-                                    <td class="px-4 py-2"><?= htmlspecialchars($e['student_name']) ?></td>
-                                    <td class="px-4 py-2"><?= htmlspecialchars($e['course_name']) ?></td>
-                                    <td class="px-4 py-2"><?= htmlspecialchars($e['year_level']) ?></td>
-                                    <td class="px-4 py-2">
-                                        <a href="?action=unenroll_student&student_id=<?= $e['student_id'] ?>&course_id=<?= $e['course_id'] ?>"
-                                            class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg text-sm"
-                                            onclick="return confirm('Remove this student from course?')">Unenroll</a>
+                            <?php foreach ($summary as $row): ?>
+                                <tr class="border-b border-gray-700">
+                                    <td class="p-3"><?= htmlspecialchars($row['course_name']) ?></td>
+                                    <td class="p-3"><?= htmlspecialchars($row['year_level']) ?></td>
+                                    <td class="p-3"><?= $row['total_records'] ?></td>
+                                    <td class="p-3 text-green-400"><?= $row['total_present'] ?></td>
+                                    <td class="p-3 text-red-400"><?= $row['total_absent'] ?></td>
+                                    <td class="p-3 text-yellow-400"><?= $row['total_late'] ?></td>
+                                    <td class="p-3 text-blue-400"><?= $row['total_excused'] ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <p class="text-gray-400">No attendance records available.</p>
+            <?php endif; ?>
+        </div>
+        <!-- Excuse Letters Management -->
+        <div class="bg-darkSurface p-6 space-y-8 rounded-2xl shadow-lg">
+            <h2 class="text-xl font-semibold text-primary mb-4">Excuse Letters</h2>
+
+            <?php if ($excuseLetters): ?>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border border-gray-700 rounded-lg overflow-hidden">
+                        <thead class="bg-gray-800 text-accent">
+                            <tr>
+                                <th class="p-3">Student</th>
+                                <th class="p-3">Course</th>
+                                <th class="p-3">Year Level</th>
+                                <th class="p-3">Reason</th>
+                                <th class="p-3">Attachment</th>
+                                <th class="p-3">Status</th>
+                                <th class="p-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($excuseLetters as $el): ?>
+                                <tr class="border-b border-gray-700">
+                                    <td class="p-3">
+                                        <?= htmlspecialchars($e['student_name']) ?>
+                                        (<?= htmlspecialchars($e['student_email']) ?>)
+                                    </td>
+                                    <td class="p-3"><?= htmlspecialchars($el['course_name']) ?></td>
+                                    <td class="p-3"><?= htmlspecialchars($el['year_level']) ?></td>
+                                    <td class="p-3"><?= htmlspecialchars($el['reason']) ?></td>
+                                    <td class="p-3">
+                                        <?php if ($el['file_path']): ?>
+                                            <a href="<?= $el['file_path'] ?>" target="_blank" class="text-blue-400 underline">View
+                                                File</a>
+                                        <?php else: ?>
+                                            <span class="text-gray-400">None</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="p-3 font-medium 
+                                <?= $el['status'] === 'Approved' ? 'text-green-400' :
+                                    ($el['status'] === 'Rejected' ? 'text-red-400' : 'text-yellow-400') ?>">
+                                        <?= $el['status'] ?>
+                                    </td>
+                                    <td class="p-3 space-x-2">
+                                        <?php if ($el['status'] === 'Pending'): ?>
+                                            <a href="../core/admin_handle.php?action=approve_excuse&id=<?= $el['id'] ?>"
+                                                class="bg-green-600 hover:bg-green-700 px-3 py-1 rounded-lg text-sm">Approve</a>
+                                            <a href="../core/admin_handle.php?action=reject_excuse&id=<?= $el['id'] ?>"
+                                                class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg text-sm">Reject</a>
+                                        <?php else: ?>
+                                            <span class="text-gray-400">No Actions</span>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
-            </section>
-            <!-- Attendance Reports -->
-            <div class="bg-darkSurface p-6 rounded-2xl shadow-lg mt-8">
-                <h2 class="text-xl font-semibold text-primary mb-4">Attendance Reports</h2>
-
-                <?php
-                $summary = $admin->getAttendanceSummary();
-                if ($summary): ?>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border border-gray-700 rounded-lg overflow-hidden">
-                            <thead class="bg-gray-800 text-accent">
-                                <tr>
-                                    <th class="p-3">Course</th>
-                                    <th class="p-3">Year Level</th>
-                                    <th class="p-3">Total Records</th>
-                                    <th class="p-3">Present</th>
-                                    <th class="p-3">Absent</th>
-                                    <th class="p-3">Late</th>
-                                    <th class="p-3">Excused</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($summary as $row): ?>
-                                    <tr class="border-b border-gray-700">
-                                        <td class="p-3"><?= htmlspecialchars($row['course_name']) ?></td>
-                                        <td class="p-3"><?= htmlspecialchars($row['year_level']) ?></td>
-                                        <td class="p-3"><?= $row['total_records'] ?></td>
-                                        <td class="p-3 text-green-400"><?= $row['total_present'] ?></td>
-                                        <td class="p-3 text-red-400"><?= $row['total_absent'] ?></td>
-                                        <td class="p-3 text-yellow-400"><?= $row['total_late'] ?></td>
-                                        <td class="p-3 text-blue-400"><?= $row['total_excused'] ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                <?php else: ?>
-                    <p class="text-gray-400">No attendance records available.</p>
-                <?php endif; ?>
-            </div>
-
-        </section>
+            <?php else: ?>
+                <p class="text-gray-400">No excuse letters submitted yet.</p>
+            <?php endif; ?>
+        </div>
     </div>
+
+
 
     <!-- Hidden Edit Form (Modal style) -->
     <div id="editForm" class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-50">
         <div class="bg-darkSurface p-6 rounded-xl shadow-lg w-96">
             <h3 class="text-lg font-semibold mb-4">Edit Course</h3>
-            <form method="POST">
+            <form method="POST" action="../core/admin_handle.php">
                 <input type="hidden" name="action" value="edit_course">
                 <input type="hidden" name="id" id="editId">
                 <input type="text" name="course_name" id="editCourseName" required
